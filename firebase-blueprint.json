@@ -1,0 +1,536 @@
+{
+  "entities": {
+    "Reservation": {
+      "title": "Reservation",
+      "description": "Restaurant table booking record including guest details, time, and payment info.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the reservation",
+          "maxLength": 128
+        },
+        "userId": {
+          "type": "string",
+          "description": "User UID who made the reservation or guest ID",
+          "maxLength": 128
+        },
+        "customerName": {
+          "type": "string",
+          "description": "Full name of the reservation holder",
+          "maxLength": 100
+        },
+        "customerEmail": {
+          "type": "string",
+          "description": "Email address for confirmation and alerts",
+          "maxLength": 100
+        },
+        "customerPhone": {
+          "type": "string",
+          "description": "Phone or WhatsApp number for contact",
+          "maxLength": 30
+        },
+        "guestsCount": {
+          "type": "number",
+          "description": "Total number of dining guests"
+        },
+        "tableId": {
+          "type": "string",
+          "description": "Selected table identifier",
+          "maxLength": 64
+        },
+        "tableName": {
+          "type": "string",
+          "description": "Display name of the table",
+          "maxLength": 64
+        },
+        "tableSection": {
+          "type": "string",
+          "description": "Dining area section",
+          "maxLength": 64
+        },
+        "date": {
+          "type": "string",
+          "description": "Date of reservation in YYYY-MM-DD",
+          "maxLength": 20
+        },
+        "timeSlot": {
+          "type": "string",
+          "description": "Time slot of reservation",
+          "maxLength": 20
+        },
+        "occasion": {
+          "type": "string",
+          "description": "Special dining occasion",
+          "maxLength": 50
+        },
+        "specialNotes": {
+          "type": "string",
+          "description": "Special dietary requests or seating notes",
+          "maxLength": 300
+        },
+        "depositAmount": {
+          "type": "number",
+          "description": "Deposit or commitment fee amount in IDR"
+        },
+        "paymentStatus": {
+          "type": "string",
+          "description": "Status of the deposit payment: pending, paid, refunded",
+          "enum": ["pending", "paid", "refunded"]
+        },
+        "paymentMethod": {
+          "type": "string",
+          "description": "Digital payment method chosen",
+          "maxLength": 50
+        },
+        "paymentReference": {
+          "type": "string",
+          "description": "Transaction reference or QRIS code trace",
+          "maxLength": 100
+        },
+        "status": {
+          "type": "string",
+          "description": "Reservation status: pending_payment, confirmed, seated, completed, cancelled",
+          "enum": ["pending_payment", "confirmed", "seated", "completed", "cancelled"]
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp when reservation was created",
+          "maxLength": 64
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp when reservation was last updated",
+          "maxLength": 64
+        }
+      },
+      "required": [
+        "customerName",
+        "customerEmail",
+        "customerPhone",
+        "tableId",
+        "tableName",
+        "date",
+        "timeSlot",
+        "guestsCount",
+        "depositAmount",
+        "paymentStatus",
+        "status"
+      ]
+    },
+    "Table": {
+      "title": "Table",
+      "description": "Physical restaurant table details with capacity, section, and status.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Table identifier",
+          "maxLength": 64
+        },
+        "name": {
+          "type": "string",
+          "description": "Table name e.g. T-01, VIP-A",
+          "maxLength": 64
+        },
+        "section": {
+          "type": "string",
+          "description": "Area section (Main Dining, Window Booth, VIP Room, Garden Terrace)",
+          "maxLength": 64
+        },
+        "capacity": {
+          "type": "number",
+          "description": "Maximum number of seats"
+        },
+        "minSpend": {
+          "type": "number",
+          "description": "Minimum spend requirement in IDR"
+        },
+        "depositFee": {
+          "type": "number",
+          "description": "Deposit fee to lock table in IDR"
+        },
+        "status": {
+          "type": "string",
+          "description": "Current table status: available, reserved, occupied, maintenance",
+          "enum": ["available", "reserved", "occupied", "maintenance"]
+        },
+        "description": {
+          "type": "string",
+          "description": "Ambience and seating highlights",
+          "maxLength": 200
+        },
+        "x": {
+          "type": "number",
+          "description": "Floor plan horizontal coordinate in percent (0-100)"
+        },
+        "y": {
+          "type": "number",
+          "description": "Floor plan vertical coordinate in percent (0-100)"
+        },
+        "shape": {
+          "type": "string",
+          "description": "Table visual shape (round, rect, booth)",
+          "maxLength": 20
+        }
+      },
+      "required": ["id", "name", "section", "capacity", "depositFee", "status"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "Real-time alert for customers and staff regarding reservation and payment updates.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique notification identifier",
+          "maxLength": 128
+        },
+        "title": {
+          "type": "string",
+          "description": "Alert title",
+          "maxLength": 150
+        },
+        "message": {
+          "type": "string",
+          "description": "Alert message body",
+          "maxLength": 400
+        },
+        "type": {
+          "type": "string",
+          "description": "Notification category",
+          "enum": ["reservation_created", "payment_confirmed", "status_changed", "table_ready", "reminder", "general"]
+        },
+        "recipientEmail": {
+          "type": "string",
+          "description": "Target email or 'all_staff'",
+          "maxLength": 100
+        },
+        "reservationId": {
+          "type": "string",
+          "description": "Associated reservation id if any",
+          "maxLength": 128
+        },
+        "isRead": {
+          "type": "boolean",
+          "description": "Whether notification has been acknowledged"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp",
+          "maxLength": 64
+        }
+      },
+      "required": ["title", "message", "type", "createdAt"]
+    },
+    "CustomerReview": {
+      "title": "CustomerReview",
+      "description": "Google Review and in-app rating submitted by customer after reservation checkout or payment.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique review identifier",
+          "maxLength": 128
+        },
+        "reservationId": {
+          "type": "string",
+          "description": "Associated reservation id",
+          "maxLength": 128
+        },
+        "customerName": {
+          "type": "string",
+          "description": "Name of reviewing guest",
+          "maxLength": 100
+        },
+        "rating": {
+          "type": "number",
+          "description": "Star rating out of 5"
+        },
+        "reviewText": {
+          "type": "string",
+          "description": "Review comment",
+          "maxLength": 500
+        },
+        "tags": {
+          "type": "string",
+          "description": "Selected feedback highlights e.g. Makanan Lezat, Pelayanan Cepat",
+          "maxLength": 200
+        },
+        "postedToGoogle": {
+          "type": "boolean",
+          "description": "Whether customer opened Google Maps review link"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Submission timestamp",
+          "maxLength": 64
+        }
+      },
+      "required": ["id", "customerName", "rating", "createdAt"]
+    },
+    "LoyaltyAccount": {
+      "title": "LoyaltyAccount",
+      "description": "Customer Savour Points loyalty ledger, tier, and points balance for discounts.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique loyalty account id or phone/email key",
+          "maxLength": 128
+        },
+        "customerPhone": {
+          "type": "string",
+          "description": "Phone number used as loyalty key",
+          "maxLength": 30
+        },
+        "customerEmail": {
+          "type": "string",
+          "description": "Email address of member",
+          "maxLength": 100
+        },
+        "customerName": {
+          "type": "string",
+          "description": "Name of loyalty member",
+          "maxLength": 100
+        },
+        "pointsBalance": {
+          "type": "number",
+          "description": "Current redeemable points balance"
+        },
+        "lifetimePointsEarned": {
+          "type": "number",
+          "description": "Total points accumulated over time"
+        },
+        "tier": {
+          "type": "string",
+          "description": "Membership tier: Silver, Gold, Platinum",
+          "enum": ["Silver", "Gold", "Platinum"]
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Last points transaction timestamp",
+          "maxLength": 64
+        }
+      },
+      "required": ["id", "customerPhone", "customerName", "pointsBalance", "tier"]
+    },
+    "WaitlistEntry": {
+      "title": "WaitlistEntry",
+      "description": "Virtual queue entry for customers waiting for a table when full house.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique waitlist queue identifier",
+          "maxLength": 128
+        },
+        "queueNumber": {
+          "type": "number",
+          "description": "Sequential queue ticket number"
+        },
+        "queueCode": {
+          "type": "string",
+          "description": "Human friendly ticket code, e.g. WL-104",
+          "maxLength": 32
+        },
+        "customerName": {
+          "type": "string",
+          "description": "Customer name",
+          "maxLength": 100
+        },
+        "customerPhone": {
+          "type": "string",
+          "description": "Phone number for notification",
+          "maxLength": 30
+        },
+        "customerEmail": {
+          "type": "string",
+          "description": "Email address",
+          "maxLength": 100
+        },
+        "guestCount": {
+          "type": "number",
+          "description": "Number of guests"
+        },
+        "preferredSection": {
+          "type": "string",
+          "description": "Preferred dining area or any",
+          "maxLength": 32
+        },
+        "preferredTimeSlot": {
+          "type": "string",
+          "description": "Requested dining time slot",
+          "maxLength": 32
+        },
+        "specialRequests": {
+          "type": "string",
+          "description": "Any special notes or dietary request",
+          "maxLength": 300
+        },
+        "status": {
+          "type": "string",
+          "description": "Current queue status",
+          "enum": ["waiting", "called", "seated", "cancelled"]
+        },
+        "estimatedWaitMinutes": {
+          "type": "number",
+          "description": "Estimated waiting time in minutes"
+        },
+        "joinedAt": {
+          "type": "string",
+          "description": "ISO timestamp when customer entered queue",
+          "maxLength": 64
+        },
+        "calledAt": {
+          "type": "string",
+          "description": "ISO timestamp when customer was called",
+          "maxLength": 64
+        },
+        "seatedAt": {
+          "type": "string",
+          "description": "ISO timestamp when customer was seated",
+          "maxLength": 64
+        },
+        "assignedTableId": {
+          "type": "string",
+          "description": "Assigned table identifier if seated",
+          "maxLength": 64
+        },
+        "loyaltyTier": {
+          "type": "string",
+          "description": "Customer loyalty tier for VIP queue priority",
+          "maxLength": 32
+        }
+      },
+      "required": ["id", "customerName", "customerPhone", "guestCount", "status", "joinedAt"]
+    },
+    "WaitlistChatMessage": {
+      "title": "WaitlistChatMessage",
+      "description": "Two-way real-time chat message between restaurant staff and waiting customers in the queue.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the chat message",
+          "maxLength": 128
+        },
+        "waitlistEntryId": {
+          "type": "string",
+          "description": "Reference identifier of the waitlist queue ticket",
+          "maxLength": 128
+        },
+        "queueCode": {
+          "type": "string",
+          "description": "Queue code e.g. WL-001",
+          "maxLength": 32
+        },
+        "senderRole": {
+          "type": "string",
+          "description": "Sender role: 'customer' or 'staff'",
+          "maxLength": 16
+        },
+        "senderName": {
+          "type": "string",
+          "description": "Display name of message sender",
+          "maxLength": 100
+        },
+        "text": {
+          "type": "string",
+          "description": "Message content",
+          "maxLength": 500
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "ISO timestamp when the message was sent",
+          "maxLength": 64
+        },
+        "isRead": {
+          "type": "boolean",
+          "description": "Whether the message has been viewed by the recipient"
+        }
+      },
+      "required": ["id", "waitlistEntryId", "senderRole", "text", "createdAt"]
+    },
+    "MenuItem": {
+      "title": "MenuItem",
+      "description": "Culinary menu item record including pricing, category, gourmet photo, and real-time stock availability.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the menu item",
+          "maxLength": 128
+        },
+        "name": {
+          "type": "string",
+          "description": "Dish or beverage name",
+          "maxLength": 100
+        },
+        "category": {
+          "type": "string",
+          "description": "Culinary category",
+          "maxLength": 64
+        },
+        "price": {
+          "type": "number",
+          "description": "Price in Indonesian Rupiah (IDR)"
+        },
+        "description": {
+          "type": "string",
+          "description": "Flavor description and ingredients",
+          "maxLength": 500
+        },
+        "imageUrl": {
+          "type": "string",
+          "description": "Gourmet food photo URL",
+          "maxLength": 500
+        },
+        "isAvailable": {
+          "type": "boolean",
+          "description": "Real-time stock availability toggle"
+        },
+        "isChefSpecial": {
+          "type": "boolean",
+          "description": "Chef's recommendation badge"
+        }
+      },
+      "required": ["id", "name", "category", "price", "isAvailable"]
+    }
+  },
+  "firestore": {
+    "/reservations/{reservationId}": {
+      "schema": "Reservation",
+      "description": "Collection of all restaurant dining reservations"
+    },
+    "/tables/{tableId}": {
+      "schema": "Table",
+      "description": "Collection of dining tables and their real-time status"
+    },
+    "/notifications/{notificationId}": {
+      "schema": "Notification",
+      "description": "Collection of real-time alerts for booking and payments"
+    },
+    "/reviews/{reviewId}": {
+      "schema": "CustomerReview",
+      "description": "Collection of customer ratings and Google Reviews feedback"
+    },
+    "/loyalty_accounts/{accountId}": {
+      "schema": "LoyaltyAccount",
+      "description": "Customer loyalty rewards balance and membership profile"
+    },
+    "/waitlist/{entryId}": {
+      "schema": "WaitlistEntry",
+      "description": "Real-time virtual waitlist queue when restaurant tables are full"
+    },
+    "/waitlist_messages/{messageId}": {
+      "schema": "WaitlistChatMessage",
+      "description": "Real-time chat messages between staff and waitlist guests"
+    },
+    "/menu_items/{itemId}": {
+      "schema": "MenuItem",
+      "description": "Collection of culinary menu items with real-time stock status"
+    }
+  }
+}
+

@@ -1,0 +1,147 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return (isSignedIn() && request.auth.token.email == 'accgoory@gmail.com') ||
+             (isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+    }
+
+    // Admins collection
+    match /admins/{adminId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // Tables Collection: public read for floor plan, write for admins or status update
+    match /tables/{tableId} {
+      allow get: if isValidId(tableId);
+      allow list: if true;
+      allow create: if isValidId(tableId);
+      allow update: if isValidId(tableId);
+      allow delete: if isAdmin();
+    }
+
+    // Reservations Collection
+    match /reservations/{reservationId} {
+      allow get: if isValidId(reservationId);
+      allow list: if true;
+      allow create: if isValidId(reservationId) &&
+        incoming().customerName is string &&
+        incoming().customerName.size() <= 100 &&
+        incoming().customerEmail is string &&
+        incoming().customerEmail.size() <= 100 &&
+        incoming().customerPhone is string &&
+        incoming().customerPhone.size() <= 30 &&
+        incoming().depositAmount is number &&
+        incoming().depositAmount >= 0;
+
+      allow update: if isValidId(reservationId) && (
+        isAdmin() ||
+        incoming().diff(existing()).affectedKeys().hasOnly(['status', 'paymentStatus', 'paymentMethod', 'paymentReference', 'updatedAt', 'pointsEarned', 'pointsRedeemed', 'pointsDiscountAmount'])
+      );
+
+      allow delete: if isAdmin();
+    }
+
+    // Notifications Collection: Real-time broadcast for updates
+    match /notifications/{notificationId} {
+      allow get: if isValidId(notificationId);
+      allow list: if true;
+      allow create: if isValidId(notificationId) &&
+        incoming().title is string &&
+        incoming().title.size() <= 150 &&
+        incoming().message is string &&
+        incoming().message.size() <= 400;
+      allow update: if isValidId(notificationId) &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['isRead']);
+      allow delete: if isAdmin();
+    }
+
+    // Reviews Collection: Customer Google Reviews & In-App ratings
+    match /reviews/{reviewId} {
+      allow get: if isValidId(reviewId);
+      allow list: if true;
+      allow create: if isValidId(reviewId) &&
+        incoming().customerName is string &&
+        incoming().customerName.size() <= 100 &&
+        incoming().rating is number &&
+        incoming().rating >= 1 &&
+        incoming().rating <= 5;
+      allow update: if isValidId(reviewId);
+      allow delete: if isAdmin();
+    }
+
+    // Loyalty Accounts: Customer Savour Points balance and redemptions
+    match /loyalty_accounts/{accountId} {
+      allow get: if isValidId(accountId);
+      allow list: if true;
+      allow create, update: if isValidId(accountId);
+      allow delete: if isAdmin();
+    }
+
+    // Waitlist Collection: Virtual queue when tables are full
+    match /waitlist/{entryId} {
+      allow get: if isValidId(entryId);
+      allow list: if true;
+      allow create: if isValidId(entryId) &&
+        incoming().customerName is string &&
+        incoming().customerName.size() <= 100 &&
+        incoming().customerPhone is string &&
+        incoming().customerPhone.size() <= 30 &&
+        incoming().guestCount is number &&
+        incoming().guestCount >= 1;
+      allow update: if isValidId(entryId);
+      allow delete: if isAdmin();
+    }
+
+    // Waitlist Real-Time Chat Messages: Communication between staff and waitlist guests
+    match /waitlist_messages/{messageId} {
+      allow get: if isValidId(messageId);
+      allow list: if true;
+      allow create: if isValidId(messageId) &&
+        incoming().text is string &&
+        incoming().text.size() <= 500 &&
+        incoming().waitlistEntryId is string &&
+        incoming().senderRole in ['customer', 'staff'];
+      allow update: if isValidId(messageId);
+      allow delete: if isAdmin();
+    }
+
+    // Restaurant Settings: Profile, operating hours, notification config, deposit fees, and crew security
+    match /restaurant_settings/{settingId} {
+      allow get, list: if true;
+      allow create, update: if isValidId(settingId);
+      allow delete: if isAdmin();
+    }
+
+    // Restaurant Menu Items: Real-time stock availability, categories, and culinary catalog
+    match /menu_items/{itemId} {
+      allow get, list: if true;
+      allow create, update: if isValidId(itemId);
+      allow delete: if isAdmin();
+    }
+  }
+}

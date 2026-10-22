@@ -1,0 +1,6 @@
+{
+  "name": "Savour & Co. - Sistem Reservasi & Pembayaran Restoran Real-time",
+  "description": "Aplikasi reservasi restoran modern dengan tata letak meja interaktif, pembayaran digital multi-metode (QRIS, e-Wallet, VA), notifikasi real-time, dan manajemen meja berbasis Firebase.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
