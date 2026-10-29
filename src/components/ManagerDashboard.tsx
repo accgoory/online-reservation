@@ -49,7 +49,8 @@ import {
   createReservation,
   simulateFullHouse,
   freeUpAllTables,
-  reassignReservationTable
+  reassignReservationTable,
+  processPaymentSuccess
 } from '../services/restaurantService';
 import {
   subscribeToWaitlist,
@@ -252,6 +253,13 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
         return (
           <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-cyan-500/20 text-cyan-400 border border-cyan-500/40">
             Sedang Makan (Seated)
+          </span>
+        );
+      case 'waiting_verification':
+        return (
+          <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1 animate-pulse">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+            Menunggu Verifikasi Kasir
           </span>
         );
       case 'pending_payment':
@@ -735,8 +743,14 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                         <div className="font-mono font-semibold text-emerald-400">
                           Rp {res.depositAmount.toLocaleString('id-ID')}
                         </div>
-                        <div className="text-[10px] text-stone-400">
-                          {res.paymentStatus === 'paid' ? '✓ Lunas' : '⏳ Pending'}
+                        <div className="text-[10px]">
+                          {res.paymentStatus === 'paid' ? (
+                            <span className="text-emerald-400 font-semibold">✓ Lunas</span>
+                          ) : res.paymentStatus === 'waiting_verification' ? (
+                            <span className="text-amber-400 font-bold animate-pulse">⏳ Menunggu Verifikasi</span>
+                          ) : (
+                            <span className="text-stone-400">⏳ Belum Bayar</span>
+                          )}
                         </div>
                       </td>
 
@@ -747,6 +761,25 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                       <td className="py-3.5 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
                           
+                          {/* Cashier: Verify Payment Button */}
+                          {(res.paymentStatus === 'waiting_verification' || res.status === 'waiting_verification') && (
+                            <button
+                              onClick={async () => {
+                                await processPaymentSuccess(res.id, res.paymentMethod || 'qris', res.paymentReference || `VERIF-${Date.now()}`, res);
+                                playChime('payment');
+                                const waUrl = `https://wa.me/${res.customerPhone.replace(/\D/g, '')}?text=${encodeURIComponent(
+                                  `Halo Kak ${res.customerName}, pembayaran deposit reservasi Anda di Goory Coffee & Eatery (Kode: ${res.bookingCode}, Meja: ${res.tableName}) telah berhasil DIVERIFIKASI LUNAS oleh kasir kami. Meja Anda siap menyambut Anda pada ${res.date} jam ${res.timeSlot} WIB. Sampai jumpa di restoran!`
+                                )}`;
+                                window.open(waUrl, '_blank');
+                              }}
+                              title="Verifikasi Pembayaran & Kirim Konfirmasi WhatsApp ke Tamu"
+                              className="px-2.5 py-1.5 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-stone-950 font-bold text-[11px] flex items-center gap-1 shadow-sm transition-all cursor-pointer"
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5 stroke-[2.5]" />
+                              Verifikasi Lunas
+                            </button>
+                          )}
+
                           {/* Action 1: Alert table ready */}
                           {res.status === 'confirmed' && (
                             <button

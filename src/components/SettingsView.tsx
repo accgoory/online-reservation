@@ -32,7 +32,9 @@ import {
   Copy,
   ExternalLink,
   Instagram,
-  Share2
+  Share2,
+  Upload,
+  RefreshCw
 } from 'lucide-react';
 import { 
   AppSettings, 
@@ -41,7 +43,8 @@ import {
   RestaurantSettings, 
   NotificationSettings, 
   DepositSettings, 
-  CrewAccessSettings 
+  CrewAccessSettings,
+  QrisSettings
 } from '../types/settings';
 import { 
   saveAppSettings, 
@@ -80,6 +83,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [notifications, setNotifications] = useState<NotificationSettings>(initialSettings.notifications);
   const [deposit, setDeposit] = useState<DepositSettings>(initialSettings.deposit);
   const [crewAccess, setCrewAccess] = useState<CrewAccessSettings>(initialSettings.crewAccess);
+  const [qris, setQris] = useState<QrisSettings>(initialSettings.qris || DEFAULT_APP_SETTINGS.qris);
+  const [testPreviewKey, setTestPreviewKey] = useState<number>(Date.now());
 
   // Security & password form state
   const [currentPassword, setCurrentPassword] = useState<string>('');
@@ -102,6 +107,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setNotifications(initialSettings.notifications);
     setDeposit(initialSettings.deposit);
     setCrewAccess(initialSettings.crewAccess);
+    setQris(initialSettings.qris || DEFAULT_APP_SETTINGS.qris);
   }, [initialSettings]);
 
   // Handle Save
@@ -117,6 +123,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         notifications,
         deposit,
         crewAccess,
+        qris,
         updatedAt: new Date().toISOString(),
         updatedBy: adminProfile.email || 'Admin'
       };
@@ -170,6 +177,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       setNotifications(reset.notifications);
       setDeposit(reset.deposit);
       setCrewAccess(reset.crewAccess);
+      setQris(reset.qris || DEFAULT_APP_SETTINGS.qris);
       if (onSettingsUpdated) {
         onSettingsUpdated(reset);
       }
@@ -1176,6 +1184,234 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   </label>
                 );
               })}
+            </div>
+          </div>
+
+          {/* Dedicated Section: Pengaturan Kode QRIS Dinamis & Refresh Pembayaran */}
+          <div className="pt-4 border-t border-stone-800/80 space-y-4">
+            <div className="p-5 rounded-2xl bg-[#131e18] border border-[#354c3e] space-y-5 shadow-lg">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#354c3e]/70 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+                    <QrCode className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-[#fcfbf9] flex items-center gap-2">
+                      <span>Konfigurasi Kode QRIS &amp; Logika Refresh Otomatis</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 font-semibold font-mono">
+                        Dinamis
+                      </span>
+                    </h4>
+                    <p className="text-xs text-[#b8c9bf] mt-0.5">
+                      Kelola identitas QRIS (NMID, Nama Merchant, mode generator) dan interval refresh agar QR selalu akurat sesuai nominal deposit terbaru.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 self-start sm:self-auto">
+                  <span className="text-[11px] text-[#8ea598]">Auto-Refresh:</span>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={qris.autoRefreshEnabled}
+                      onChange={(e) => setQris({ ...qris, autoRefreshEnabled: e.target.checked })}
+                      className="sr-only peer"
+                    />
+                    <div className="w-10 h-5 bg-stone-800 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-stone-950 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
+                  </label>
+                </div>
+              </div>
+
+              {/* Mode Selector */}
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-stone-300 block">
+                  Metode Pembuatan / Sumber Kode QRIS:
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  {[
+                    {
+                      id: 'dynamic_auto',
+                      title: 'Otomatis Dinamis',
+                      desc: 'Generate otomatis sesuai nominal deposit & booking ID tamu secara real-time'
+                    },
+                    {
+                      id: 'custom_image',
+                      title: 'Foto / Gambar Toko',
+                      desc: 'Unggah file gambar atau URL QRIS resmi dari Bank/E-Wallet Anda'
+                    },
+                    {
+                      id: 'custom_payload',
+                      title: 'Payload EMVCo String',
+                      desc: 'Gunakan string raw payload standar Bank Indonesia (00020101...)'
+                    }
+                  ].map((mode) => (
+                    <button
+                      key={mode.id}
+                      type="button"
+                      onClick={() => setQris({ ...qris, qrisMode: mode.id as any })}
+                      className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                        qris.qrisMode === mode.id
+                          ? 'bg-amber-950/30 border-amber-500 text-stone-100 ring-1 ring-amber-500/40'
+                          : 'bg-[#18261e] border-[#354c3e] text-stone-400 hover:border-stone-600'
+                      }`}
+                    >
+                      <div className="text-xs font-bold text-amber-300">{mode.title}</div>
+                      <div className="text-[10px] text-stone-400 mt-1 leading-relaxed">{mode.desc}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* General QRIS Settings: NMID, Merchant Name, Interval */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-stone-300 block">NMID (National Merchant ID)</label>
+                  <input
+                    type="text"
+                    value={qris.nmid}
+                    onChange={(e) => setQris({ ...qris, nmid: e.target.value.toUpperCase().trim() })}
+                    placeholder="ID102039281923"
+                    className="w-full bg-stone-900 border border-stone-700 rounded-xl px-3 py-2 text-xs text-stone-100 font-mono focus:outline-hidden focus:border-amber-500"
+                  />
+                  <span className="text-[10px] text-stone-400">Kode unik identifikasi merchant Bank Indonesia</span>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-stone-300 block">Nama Merchant di QRIS</label>
+                  <input
+                    type="text"
+                    value={qris.merchantName}
+                    onChange={(e) => setQris({ ...qris, merchantName: e.target.value.toUpperCase() })}
+                    placeholder="GOORY COFFEE & EATERY"
+                    className="w-full bg-stone-900 border border-stone-700 rounded-xl px-3 py-2 text-xs text-stone-100 uppercase focus:outline-hidden focus:border-amber-500"
+                  />
+                  <span className="text-[10px] text-stone-400">Nama toko yang terbaca oleh aplikasi perbankan tamu</span>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-stone-300 block">Interval Refresh QR (Detik)</label>
+                  <select
+                    value={qris.refreshIntervalSeconds || 60}
+                    onChange={(e) => setQris({ ...qris, refreshIntervalSeconds: parseInt(e.target.value) || 60 })}
+                    className="w-full bg-stone-900 border border-stone-700 rounded-xl px-3 py-2 text-xs text-stone-100 focus:outline-hidden focus:border-amber-500"
+                  >
+                    <option value={30}>30 Detik (Sangat Responsif)</option>
+                    <option value={60}>60 Detik (Standar Rekomendasi)</option>
+                    <option value={90}>90 Detik</option>
+                    <option value={120}>120 Detik (2 Menit)</option>
+                    <option value={180}>180 Detik (3 Menit)</option>
+                  </select>
+                  <span className="text-[10px] text-stone-400">Jangka waktu refresh otomatis kode QR di layar tamu</span>
+                </div>
+              </div>
+
+              {/* Specific Form Fields based on Mode */}
+              {qris.qrisMode === 'custom_image' && (
+                <div className="p-4 rounded-xl bg-stone-950/80 border border-stone-800 space-y-3">
+                  <h5 className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                    <Upload className="w-3.5 h-3.5" />
+                    Upload atau Masukkan Tautan Gambar QRIS Toko
+                  </h5>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-[11px] font-semibold text-stone-300 block">Tautan Gambar QRIS (URL)</label>
+                      <input
+                        type="url"
+                        value={qris.customImageUrl || ''}
+                        onChange={(e) => setQris({ ...qris, customImageUrl: e.target.value })}
+                        placeholder="https://example.com/qris-goory.png"
+                        className="w-full bg-stone-900 border border-stone-700 rounded-xl px-3 py-2 text-xs text-stone-100 focus:outline-hidden focus:border-amber-500"
+                      />
+                      <div className="text-[10px] text-stone-400">Atau pilih file gambar langsung dari perangkat Anda:</div>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onload = (loadEvent) => {
+                              const result = loadEvent.target?.result as string;
+                              setQris({ ...qris, customImageUrl: result });
+                            };
+                            reader.readAsDataURL(file);
+                          }
+                        }}
+                        className="text-xs text-stone-400 file:mr-2 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-amber-600 file:text-stone-950 hover:file:bg-amber-500 cursor-pointer"
+                      />
+                    </div>
+
+                    {qris.customImageUrl && (
+                      <div className="flex flex-col items-center justify-center p-2 bg-stone-900 rounded-xl border border-stone-800">
+                        <span className="text-[10px] text-stone-400 mb-1">Preview Gambar QRIS:</span>
+                        <img
+                          src={qris.customImageUrl}
+                          alt="Custom QRIS"
+                          className="w-28 h-28 object-contain rounded-lg bg-white p-1"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {qris.qrisMode === 'custom_payload' && (
+                <div className="p-4 rounded-xl bg-stone-950/80 border border-stone-800 space-y-2">
+                  <label className="text-xs font-semibold text-stone-300 block">
+                    String Raw Payload QRIS (EMVCo Standard)
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={qris.customPayload || ''}
+                    onChange={(e) => setQris({ ...qris, customPayload: e.target.value })}
+                    placeholder="00020101021226590014ID.LINKAJA.WWW01189360091400002220300215..."
+                    className="w-full bg-stone-900 border border-stone-700 rounded-xl p-3 text-xs text-stone-100 font-mono focus:outline-hidden focus:border-amber-500"
+                  />
+                  <p className="text-[10px] text-stone-400">
+                    Masukkan string payload QRIS yang diekspor dari aplikasi merchant provider Anda.
+                  </p>
+                </div>
+              )}
+
+              {/* Interactive Live Preview Box */}
+              <div className="p-4 rounded-xl bg-[#18261e] border border-[#354c3e] flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="space-y-1 text-center sm:text-left">
+                  <div className="text-xs font-bold text-emerald-300 flex items-center justify-center sm:justify-start gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Live Preview QRIS Tamu (Simulasi Deposit Rp 100.000)</span>
+                  </div>
+                  <p className="text-[11px] text-[#8ea598]">
+                    Tampilan nyata kode QR yang akan dilihat tamu saat membayar deposit reservasi.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className="w-20 h-20 bg-white rounded-lg p-1.5 shadow-md flex items-center justify-center shrink-0">
+                    <img
+                      src={
+                        qris.qrisMode === 'custom_image' && qris.customImageUrl
+                          ? qris.customImageUrl
+                          : `https://api.qrserver.com/v1/create-qr-code/?size=180x180&margin=1&format=svg&data=${encodeURIComponent(
+                              qris.qrisMode === 'custom_payload' && qris.customPayload
+                                ? qris.customPayload
+                                : `QRIS-${qris.nmid}-${qris.merchantName}-100000-${testPreviewKey}`
+                            )}`
+                      }
+                      alt="Preview QR"
+                      className="w-full h-full object-contain"
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setTestPreviewKey(Date.now())}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#22352a] hover:bg-[#2c4436] active:scale-95 border border-[#415e4d] text-emerald-300 text-xs font-medium cursor-pointer transition-all"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>Test Refresh</span>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 

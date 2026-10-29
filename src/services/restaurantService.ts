@@ -241,6 +241,63 @@ export async function createReservation(
 }
 
 /**
+ * Record guest's "Saya Sudah Bayar" submission setting status to 'waiting_verification'
+ */
+export async function submitPaymentClaim(
+  reservationId: string,
+  paymentMethod: PaymentMethod,
+  paymentReference: string,
+  customReservation?: Reservation
+): Promise<void> {
+  const nowIso = new Date().toISOString();
+  const res = customReservation || cachedReservations.find(r => r.id === reservationId);
+
+  try {
+    const resRef = doc(db, RESERVATIONS_COLLECTION, reservationId);
+    await updateDoc(resRef, {
+      paymentStatus: 'waiting_verification',
+      paymentMethod,
+      paymentReference,
+      status: 'waiting_verification',
+      updatedAt: nowIso
+    });
+
+    if (res) {
+      // Hold table as reserved
+      await updateTableStatus(res.tableId, 'reserved');
+
+      // Broadcast notification to cashier/staff
+      await broadcastNotification({
+        title: 'Konfirmasi Pembayaran Tamu Diterima',
+        message: `Tamu ${res.customerName} telah mengonfirmasi pembayaran Rp ${res.depositAmount.toLocaleString('id-ID')} via ${paymentMethod.toUpperCase()} (${res.bookingCode}). Menunggu verifikasi kasir.`,
+        type: 'general',
+        reservationId: reservationId,
+        recipientEmail: res.customerEmail
+      });
+    }
+
+    playChime('ding');
+  } catch (err) {
+    console.error('Error submitting payment claim in Firestore:', err);
+    // Update local cache
+    cachedReservations = cachedReservations.map(r => {
+      if (r.id === reservationId) {
+        return {
+          ...r,
+          paymentStatus: 'waiting_verification',
+          paymentMethod,
+          paymentReference,
+          status: 'waiting_verification',
+          updatedAt: nowIso
+        };
+      }
+      return r;
+    });
+    playChime('ding');
+  }
+}
+
+/**
  * Process digital payment for a reservation
  */
 export async function processPaymentSuccess(

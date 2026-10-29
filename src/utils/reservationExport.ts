@@ -178,6 +178,7 @@ export function formatPaymentMethodLabel(method?: string): string {
 export function formatReservationStatusLabel(status: ReservationStatus): string {
   const map: Record<ReservationStatus, string> = {
     pending_payment: 'Menunggu Pembayaran',
+    waiting_verification: 'Menunggu Verifikasi',
     confirmed: 'Terkonfirmasi',
     arrived: 'Tamu Tiba',
     seated: 'Telah Duduk',

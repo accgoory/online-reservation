@@ -17,32 +17,107 @@ import {
   ChevronDown,
   ChevronUp,
   HelpCircle,
-  Image as ImageIcon
+  Image as ImageIcon,
+  CheckCircle2,
+  RefreshCw
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { PaymentMethod, Reservation } from '../types/restaurant';
-import { processPaymentSuccess } from '../services/restaurantService';
+import { processPaymentSuccess, submitPaymentClaim } from '../services/restaurantService';
 import { getLocalCachedSettings } from '../services/settingsService';
 
 interface DigitalPaymentGatewayProps {
   reservation: Reservation;
-  onPaymentSuccess: (reservationId: string, method: PaymentMethod, ref: string) => void;
+  isStaff?: boolean;
+  onPaymentSuccess: (reservationId: string, method: PaymentMethod, ref: string, paymentStatus: 'waiting_verification' | 'paid') => void;
   onCancel: () => void;
 }
 
 export const DigitalPaymentGateway: React.FC<DigitalPaymentGatewayProps> = ({
   reservation,
+  isStaff = false,
   onPaymentSuccess,
   onCancel
 }) => {
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod>('qris');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [isSuccess, setIsSuccess] = useState<boolean>(false);
+  const [showSuccessOverlay, setShowSuccessOverlay] = useState<boolean>(false);
   const [copiedVA, setCopiedVA] = useState<boolean>(false);
   const [copiedOwnerAcc, setCopiedOwnerAcc] = useState<boolean>(false);
   const [timeLeft, setTimeLeft] = useState<number>(899); // 14 mins 59s
   const [isQrisGuideOpen, setIsQrisGuideOpen] = useState<boolean>(true); // Expandable QRIS steps guide
   const appSettings = getLocalCachedSettings();
+
+  // QRIS configuration & auto-refresh state
+  const qrisConfig = appSettings.qris || {
+    nmid: 'ID102039281923',
+    merchantName: 'GOORY COFFEE & EATERY',
+    qrisMode: 'dynamic_auto' as const,
+    autoRefreshEnabled: true,
+    refreshIntervalSeconds: 60
+  };
+
+  const [qrRefreshKey, setQrRefreshKey] = useState<number>(() => Date.now());
+  const [qrCountdown, setQrCountdown] = useState<number>(qrisConfig.refreshIntervalSeconds || 60);
+  const [isRefreshingQr, setIsRefreshingQr] = useState<boolean>(false);
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<string>(() => 
+    new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  );
+
+  // Auto-update QR whenever reservation deposit amount changes
+  useEffect(() => {
+    setQrRefreshKey(Date.now());
+    setQrCountdown(qrisConfig.refreshIntervalSeconds || 60);
+    setLastRefreshedAt(new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+  }, [reservation.depositAmount, qrisConfig.refreshIntervalSeconds]);
+
+  // Periodic auto-refresh timer
+  useEffect(() => {
+    if (!qrisConfig.autoRefreshEnabled || selectedMethod !== 'qris') return;
+
+    const interval = setInterval(() => {
+      setQrCountdown(prev => {
+        if (prev <= 1) {
+          setQrRefreshKey(Date.now());
+          setLastRefreshedAt(new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+          return qrisConfig.refreshIntervalSeconds || 60;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [qrisConfig.autoRefreshEnabled, qrisConfig.refreshIntervalSeconds, selectedMethod]);
+
+  const handleManualRefreshQr = () => {
+    setIsRefreshingQr(true);
+    setQrRefreshKey(Date.now());
+    setQrCountdown(qrisConfig.refreshIntervalSeconds || 60);
+    setLastRefreshedAt(new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+    setTimeout(() => {
+      setIsRefreshingQr(false);
+    }, 500);
+  };
+
+  // Generate dynamic QR payload & URL
+  const qrisPayload = React.useMemo(() => {
+    if (qrisConfig.qrisMode === 'custom_payload' && qrisConfig.customPayload?.trim()) {
+      return qrisConfig.customPayload.trim();
+    }
+    const nmid = qrisConfig.nmid || 'ID102039281923';
+    const merchant = qrisConfig.merchantName || 'GOORY COFFEE & EATERY';
+    const bookingRef = reservation.bookingCode || reservation.id.slice(-6).toUpperCase();
+    const amount = reservation.depositAmount;
+    return `00020101021226${nmid.length.toString().padStart(2, '0')}${nmid}520458125303360540${amount.toString().length.toString().padStart(2, '0')}${amount}5802ID59${merchant.length.toString().padStart(2, '0')}${merchant}6008DENPASAR62${(bookingRef.length + 4).toString().padStart(2, '0')}01${bookingRef.length.toString().padStart(2, '0')}${bookingRef}6304${(qrRefreshKey % 9000 + 1000)}`;
+  }, [qrisConfig, reservation.depositAmount, reservation.bookingCode, reservation.id, qrRefreshKey]);
+
+  const qrImageUrl = React.useMemo(() => {
+    if (qrisConfig.qrisMode === 'custom_image' && qrisConfig.customImageUrl?.trim()) {
+      return qrisConfig.customImageUrl.trim();
+    }
+    return `https://api.qrserver.com/v1/create-qr-code/?size=260x260&margin=2&format=svg&data=${encodeURIComponent(qrisPayload)}`;
+  }, [qrisConfig, qrisPayload]);
 
   // Card form state
   const [cardNumber, setCardNumber] = useState<string>('4000 1234 5678 9010');
@@ -92,30 +167,38 @@ export const DigitalPaymentGateway: React.FC<DigitalPaymentGatewayProps> = ({
     }
   };
 
-  const triggerPaymentExecution = async () => {
+  const triggerPaymentExecution = async (bypassAsPaid: boolean = false) => {
     setIsProcessing(true);
     const paymentRef = `TRX-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
 
     try {
-      // Simulate real-time bank gateway handshake
-      await new Promise(resolve => setTimeout(resolve, 1800));
+      // Smooth visual verification delay
+      await new Promise(resolve => setTimeout(resolve, 600));
 
-      await processPaymentSuccess(reservation.id, selectedMethod, paymentRef, reservation);
+      if (bypassAsPaid && isStaff) {
+        await processPaymentSuccess(reservation.id, selectedMethod, paymentRef, reservation);
+        setIsProcessing(false);
+        setIsSuccess(true);
+        setShowSuccessOverlay(true);
+        confetti({
+          particleCount: 80,
+          spread: 70,
+          origin: { y: 0.6 }
+        });
+        setTimeout(() => {
+          onPaymentSuccess(reservation.id, selectedMethod, paymentRef, 'paid');
+        }, 1300);
+      } else {
+        // Customer default: 'waiting_verification'
+        await submitPaymentClaim(reservation.id, selectedMethod, paymentRef, reservation);
+        setIsProcessing(false);
+        setIsSuccess(true);
+        setShowSuccessOverlay(true);
 
-      setIsProcessing(false);
-      setIsSuccess(true);
-
-      // Trigger celebration confetti
-      confetti({
-        particleCount: 90,
-        spread: 70,
-        origin: { y: 0.6 }
-      });
-
-      setTimeout(() => {
-        onPaymentSuccess(reservation.id, selectedMethod, paymentRef);
-      }, 1200);
-
+        setTimeout(() => {
+          onPaymentSuccess(reservation.id, selectedMethod, paymentRef, 'waiting_verification');
+        }, 1400);
+      }
     } catch (err) {
       console.error('Payment error:', err);
       setIsProcessing(false);
@@ -124,7 +207,7 @@ export const DigitalPaymentGateway: React.FC<DigitalPaymentGatewayProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/80 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
-      <div className="w-full max-w-2xl bg-[#18261e] border-t sm:border border-[#354c3e] rounded-t-3xl sm:rounded-3xl overflow-hidden shadow-2xl animate-in slide-in-from-bottom-6 sm:zoom-in-95 duration-200 max-h-[94vh] flex flex-col">
+      <div className="relative w-full max-w-2xl bg-[#18261e] border-t sm:border border-[#354c3e] rounded-t-3xl sm:rounded-3xl overflow-hidden shadow-2xl animate-in slide-in-from-bottom-6 sm:zoom-in-95 duration-200 max-h-[94vh] flex flex-col">
         
         {/* Header with Security Badge & Countdown */}
         <div className="bg-gradient-to-r from-[#131e18] via-[#18261e] to-[#131e18] p-4 sm:p-5 border-b border-[#354c3e] flex items-center justify-between">
@@ -268,56 +351,79 @@ export const DigitalPaymentGateway: React.FC<DigitalPaymentGatewayProps> = ({
                   QRIS STANDAR NASIONAL
                 </span>
                 <span className="px-2 py-0.5 rounded-md bg-[#18261e] border border-[#354c3e] text-[#8ea598]">
-                  NMID: ID102039281923
+                  NMID: {qrisConfig.nmid || 'ID102039281923'}
                 </span>
-                <span className="px-2.5 py-0.5 rounded-md bg-amber-500/15 border border-amber-500/30 text-amber-300 font-semibold tracking-wide">
-                  MERCHANT: GOORY COFFEE &amp; EATERY
+                <span className="px-2.5 py-0.5 rounded-md bg-amber-500/15 border border-amber-500/30 text-amber-300 font-semibold tracking-wide uppercase">
+                  MERCHANT: {qrisConfig.merchantName || 'GOORY COFFEE & EATERY'}
                 </span>
               </div>
 
-              {/* Dynamic QR Display */}
-              <div className="p-3 bg-white rounded-2xl shadow-xl ring-4 ring-amber-500/20 max-w-[220px]">
+              {/* Dynamic QR Display with Real-time Image & Auto-Refresh */}
+              <div className="p-3 bg-white rounded-2xl shadow-xl ring-4 ring-amber-500/20 max-w-[240px] w-full">
                 <div className="p-2 border border-dashed border-stone-300 rounded-lg flex flex-col items-center">
-                  <div className="text-[10px] font-black text-red-600 tracking-widest mb-1">
-                    QRIS
+                  <div className="w-full flex items-center justify-between text-[10px] font-black tracking-wider text-stone-700 px-1 mb-1">
+                    <span className="text-red-600 font-black">QRIS</span>
+                    <span className="text-[9px] text-stone-500 font-mono font-medium">GPN</span>
                   </div>
-                  {/* Generated clean SVG QR representation */}
-                  <svg className="w-44 h-44" viewBox="0 0 100 100" fill="black">
-                    <rect width="100" height="100" fill="white" />
-                    {/* Top Left Marker */}
-                    <rect x="10" y="10" width="24" height="24" fill="black" />
-                    <rect x="14" y="14" width="16" height="16" fill="white" />
-                    <rect x="18" y="18" width="8" height="8" fill="black" />
-                    {/* Top Right Marker */}
-                    <rect x="66" y="10" width="24" height="24" fill="black" />
-                    <rect x="70" y="14" width="16" height="16" fill="white" />
-                    <rect x="74" y="18" width="8" height="8" fill="black" />
-                    {/* Bottom Left Marker */}
-                    <rect x="10" y="66" width="24" height="24" fill="black" />
-                    <rect x="14" y="70" width="16" height="16" fill="white" />
-                    <rect x="18" y="74" width="8" height="8" fill="black" />
-                    {/* Data Pattern matrix simulation */}
-                    <rect x="38" y="12" width="4" height="16" fill="black" />
-                    <rect x="46" y="10" width="4" height="4" fill="black" />
-                    <rect x="54" y="14" width="4" height="12" fill="black" />
-                    <rect x="42" y="32" width="16" height="4" fill="black" />
-                    <rect x="12" y="42" width="16" height="4" fill="black" />
-                    <rect x="32" y="42" width="8" height="8" fill="black" />
-                    <rect x="44" y="42" width="12" height="12" fill="black" />
-                    <rect x="60" y="38" width="8" height="8" fill="black" />
-                    <rect x="72" y="42" width="18" height="4" fill="black" />
-                    <rect x="76" y="50" width="4" height="12" fill="black" />
-                    <rect x="40" y="60" width="16" height="4" fill="black" />
-                    <rect x="40" y="68" width="8" height="8" fill="black" />
-                    <rect x="52" y="72" width="8" height="8" fill="black" />
-                    <rect x="64" y="64" width="24" height="4" fill="black" />
-                    <rect x="70" y="74" width="18" height="12" fill="black" />
-                    <rect x="44" y="84" width="16" height="4" fill="black" />
-                    <rect x="20" y="50" width="4" height="4" fill="black" />
-                  </svg>
-                  <span className="text-[9px] font-mono font-bold text-stone-900 mt-1 uppercase tracking-wider">
-                    GOORY COFFEE &amp; EATERY
+
+                  {/* QR Image Container with dynamic refresh state */}
+                  <div className="relative w-44 h-44 bg-white flex items-center justify-center overflow-hidden">
+                    {isRefreshingQr ? (
+                      <div className="flex flex-col items-center justify-center gap-2">
+                        <RefreshCw className="w-7 h-7 text-amber-600 animate-spin" />
+                        <span className="text-[10px] font-mono font-semibold text-stone-600">
+                          Memperbarui QR...
+                        </span>
+                      </div>
+                    ) : (
+                      <img
+                        key={qrRefreshKey}
+                        src={qrImageUrl}
+                        alt="QRIS Pembayaran Dinamis"
+                        className="w-full h-full object-contain select-none transition-opacity duration-200"
+                        loading="eager"
+                      />
+                    )}
+                  </div>
+
+                  <span className="text-[9px] font-mono font-bold text-stone-900 mt-1 uppercase tracking-wider text-center line-clamp-1">
+                    {qrisConfig.merchantName || 'GOORY COFFEE & EATERY'}
                   </span>
+                  <span className="text-[8px] font-mono text-stone-500">
+                    Ref: {reservation.bookingCode || reservation.id.slice(-6).toUpperCase()}
+                  </span>
+                </div>
+              </div>
+
+              {/* Dynamic Nominal & Auto-Refresh Status Card */}
+              <div className="w-full max-w-md bg-[#18261e] border border-[#354c3e] rounded-xl p-3 flex flex-col sm:flex-row items-center justify-between gap-3 text-left">
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-1.5 text-xs text-[#b8c9bf]">
+                    <span className="text-emerald-400 font-medium">Nominal Deposit QR:</span>
+                    <span className="font-mono font-bold text-white text-sm">
+                      Rp {reservation.depositAmount.toLocaleString('id-ID')}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-[10px] text-[#8ea598] font-mono">
+                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span>QR otomatis sinkron dengan reservasi</span>
+                    {qrisConfig.autoRefreshEnabled && (
+                      <span className="text-amber-400 font-semibold">({qrCountdown}s)</span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleManualRefreshQr}
+                    disabled={isRefreshingQr}
+                    title="Perbarui kode QR ke nominal dan sesi terbaru"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#22352a] hover:bg-[#2c4436] active:scale-95 border border-[#415e4d] text-emerald-300 text-xs font-medium transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isRefreshingQr ? 'animate-spin' : ''}`} />
+                    <span>Refresh QR</span>
+                  </button>
                 </div>
               </div>
 
@@ -651,33 +757,88 @@ export const DigitalPaymentGateway: React.FC<DigitalPaymentGatewayProps> = ({
 
             <button
               type="button"
-              onClick={triggerPaymentExecution}
+              onClick={() => triggerPaymentExecution(false)}
               disabled={isProcessing}
-              className="flex-1 py-3 px-6 rounded-xl bg-gradient-to-r from-emerald-500 via-emerald-600 to-teal-700 hover:from-emerald-400 hover:to-teal-600 text-stone-950 font-bold text-sm shadow-xl shadow-emerald-600/30 transition-all flex items-center justify-center gap-2 hover:scale-[1.01] active:scale-[0.99] disabled:opacity-60"
+              className="flex-1 py-3.5 px-6 rounded-xl bg-gradient-to-r from-emerald-500 via-emerald-600 to-teal-700 hover:from-emerald-400 hover:to-teal-600 text-stone-950 font-bold text-sm shadow-xl shadow-emerald-600/30 transition-all flex items-center justify-center gap-2 hover:scale-[1.01] active:scale-[0.99] disabled:opacity-60 cursor-pointer"
             >
               {isProcessing ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin text-stone-950" />
-                  <span>Memverifikasi Pembayaran Digital...</span>
+                  <span>Memverifikasi Pembayaran Anda...</span>
                 </>
               ) : isSuccess ? (
                 <>
                   <Check className="w-5 h-5 text-stone-950 font-black" />
-                  <span>Pembayaran Berhasil Diverifikasi!</span>
+                  <span>Konfirmasi Berhasil Dikirim!</span>
                 </>
               ) : (
                 <>
-                  <Sparkles className="w-4 h-4" />
+                  <CheckCircle2 className="w-4 h-4 text-stone-950 stroke-[2.5]" />
                   <span>
-                    Simulasikan Pembayaran Berhasil (Rp {reservation.depositAmount.toLocaleString('id-ID')})
+                    Saya Sudah Bayar (Konfirmasi Deposit Rp {reservation.depositAmount.toLocaleString('id-ID')})
                   </span>
                   <ArrowRight className="w-4 h-4" />
                 </>
               )}
             </button>
+
+            {isStaff && (
+              <button
+                type="button"
+                onClick={() => triggerPaymentExecution(true)}
+                disabled={isProcessing}
+                className="py-3.5 px-3.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 font-mono text-xs font-semibold cursor-pointer shrink-0"
+                title="Bypass langsung lunas untuk uji coba staf"
+              >
+                ⚡ Bypass Lunas (Staf)
+              </button>
+            )}
           </div>
 
+          {/* Discreet staff demo bypass indicator if in staff mode */}
+          {isStaff && (
+            <div className="pt-2 text-center">
+              <span className="text-[11px] text-amber-400/80 font-mono">
+                [Mode Staf: Tombol utama menyetel status 'Menunggu Verifikasi', tombol petir langsung menyetel 'Lunas']
+              </span>
+            </div>
+          )}
+
         </div>
+
+        {/* Soft Success Animation State Overlay */}
+        {showSuccessOverlay && (
+          <div className="absolute inset-0 z-50 bg-[#121c16]/95 backdrop-blur-md flex items-center justify-center p-6 animate-in fade-in duration-300">
+            <div className="bg-[#18261e] border-2 border-emerald-500/60 rounded-3xl p-6 sm:p-8 max-w-md w-full text-center space-y-4 shadow-2xl shadow-emerald-950/90 animate-in zoom-in-95 duration-300">
+              
+              {/* Soft pulsating ring with checkmark */}
+              <div className="relative mx-auto w-20 h-20 flex items-center justify-center">
+                <div className="absolute inset-0 rounded-full bg-emerald-500/20 animate-ping opacity-60" />
+                <div className="w-20 h-20 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-400 text-stone-950 flex items-center justify-center shadow-lg shadow-emerald-500/40 ring-4 ring-emerald-500/30">
+                  <Check className="w-10 h-10 text-stone-950 stroke-[3.5] animate-in zoom-in-50 duration-200" />
+                </div>
+              </div>
+
+              <div>
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/40 text-amber-300 text-xs font-semibold mb-2">
+                  <Clock className="w-3.5 h-3.5" />
+                  Status: Menunggu Verifikasi Kasir
+                </div>
+                <h3 className="text-xl sm:text-2xl font-display font-bold text-[#fcfbf9]">
+                  Konfirmasi Pembayaran Diterima!
+                </h3>
+                <p className="text-xs sm:text-sm text-[#b8c9bf] mt-2 leading-relaxed">
+                  Terima kasih! Kami telah menerima konfirmasi pembayaran Anda. Kasir <strong className="text-amber-300">Goory Coffee &amp; Eatery</strong> sedang memverifikasi transaksi. Tiket reservasi digital Anda telah aktif!
+                </p>
+              </div>
+
+              <div className="pt-2 flex items-center justify-center gap-2 text-xs text-emerald-400 font-mono">
+                <Loader2 className="w-4 h-4 animate-spin text-emerald-400" />
+                <span>Membuka E-Tiket Anda...</span>
+              </div>
+            </div>
+          </div>
+        )}
 
       </div>
     </div>

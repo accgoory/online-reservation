@@ -32,13 +32,16 @@ import { Header } from './components/Header';
 import { ReservationWizard } from './components/ReservationWizard';
 import { FloorPlanView } from './components/FloorPlanView';
 import { MyReservationsView } from './components/MyReservationsView';
-import { ManagerDashboard } from './components/ManagerDashboard';
 import { NotificationDrawer } from './components/NotificationDrawer';
-import { StaffAccessModal } from './components/StaffAccessModal';
 import { MobileBottomNav } from './components/MobileBottomNav';
-import { SavourClubModal } from './components/SavourClubModal';
-import { WaitlistTicketPassModal } from './components/WaitlistTicketPassModal';
-import { QRScannerModal } from './components/QRScannerModal';
+
+// Performance optimization: Lazy-load heavy internal modals and manager components
+// so guest diner initial bundle loads instantly with minimal data footprint
+const ManagerDashboard = React.lazy(() => import('./components/ManagerDashboard').then(m => ({ default: m.ManagerDashboard })));
+const StaffAccessModal = React.lazy(() => import('./components/StaffAccessModal').then(m => ({ default: m.StaffAccessModal })));
+const QRScannerModal = React.lazy(() => import('./components/QRScannerModal').then(m => ({ default: m.QRScannerModal })));
+const SavourClubModal = React.lazy(() => import('./components/SavourClubModal').then(m => ({ default: m.SavourClubModal })));
+const WaitlistTicketPassModal = React.lazy(() => import('./components/WaitlistTicketPassModal').then(m => ({ default: m.WaitlistTicketPassModal })));
 import { 
   Sparkles, 
   ShieldCheck, 
@@ -68,7 +71,7 @@ import {
   DEFAULT_APP_SETTINGS 
 } from './types/settings';
 import { subscribeToAppSettings, getLocalCachedSettings } from './services/settingsService';
-import { DigitalMenuModal } from './components/DigitalMenuModal';
+const DigitalMenuModal = React.lazy(() => import('./components/DigitalMenuModal').then(m => ({ default: m.DigitalMenuModal })));
 import { GuestMenuView } from './components/GuestMenuView';
 import { HeroSeasonalPromotions } from './components/HeroSeasonalPromotions';
 
@@ -86,9 +89,9 @@ export default function App() {
   const [selectedTableForBooking, setSelectedTableForBooking] = useState<RestaurantTable | null>(null);
   const [showQRScanner, setShowQRScanner] = useState<boolean>(false);
 
-  // Loyalty Program State
+  // Loyalty Program State (starts null so form inputs are completely blank by default)
   const [showSavourClubModal, setShowSavourClubModal] = useState<boolean>(false);
-  const [activeLoyaltyAccount, setActiveLoyaltyAccount] = useState<LoyaltyAccount | null>(INITIAL_LOYALTY_MEMBERS[0]);
+  const [activeLoyaltyAccount, setActiveLoyaltyAccount] = useState<LoyaltyAccount | null>(null);
 
   // Role Separation & Internal Portal State ('customer' | 'staff' | 'admin')
   const [userRole, setUserRole] = useState<UserRole>('customer');
@@ -558,6 +561,7 @@ export default function App() {
               initialSelectedTable={selectedTableForBooking}
               activeLoyaltyAccount={activeLoyaltyAccount}
               onOpenSavourClub={() => setShowSavourClubModal(true)}
+              isStaff={isStaffAuthenticated}
               onReservationCreated={(newBooking) => {
                 setActiveView('my-bookings');
               }}
@@ -605,20 +609,27 @@ export default function App() {
         {/* VIEW 4: MANAGER & STAFF CONTROLLER (Protected for internal team) */}
         {activeView === 'manager' && (
           isStaffAuthenticated ? (
-            <ManagerDashboard
-              tables={tables}
-              reservations={reservations}
-              isAdmin={isAdmin}
-              onRequestAdminAccess={() => {
-                setInitialPortalTab('admin');
-                setShowStaffModal(true);
-              }}
-              onOpenFloorPlan={() => setActiveView('floor')}
-              onOpenScanner={() => setShowQRScanner(true)}
-              settings={appSettings}
-              onSettingsUpdated={(newSettings) => setAppSettings(newSettings)}
-              initialSectionTab={managerSectionTab}
-            />
+            <React.Suspense fallback={
+              <div className="py-24 text-center space-y-3">
+                <div className="w-8 h-8 border-2 border-amber-400 border-t-transparent rounded-full animate-spin mx-auto" />
+                <p className="text-xs text-[#b8c9bf] font-mono">Memuat Panel Pengelola Restoran...</p>
+              </div>
+            }>
+              <ManagerDashboard
+                tables={tables}
+                reservations={reservations}
+                isAdmin={isAdmin}
+                onRequestAdminAccess={() => {
+                  setInitialPortalTab('admin');
+                  setShowStaffModal(true);
+                }}
+                onOpenFloorPlan={() => setActiveView('floor')}
+                onOpenScanner={() => setShowQRScanner(true)}
+                settings={appSettings}
+                onSettingsUpdated={(newSettings) => setAppSettings(newSettings)}
+                initialSectionTab={managerSectionTab}
+              />
+            </React.Suspense>
           ) : (
             <div className="text-center py-16 bg-stone-900/60 rounded-3xl border border-stone-800 p-8 space-y-4">
               <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center mx-auto shadow-lg shadow-amber-500/10">
@@ -659,27 +670,33 @@ export default function App() {
       </main>
 
       {/* Staff & Admin Authentication Gate Modal */}
-      <StaffAccessModal
-        isOpen={showStaffModal}
-        onClose={() => setShowStaffModal(false)}
-        onSuccess={handleInternalLoginSuccess}
-        initialRole={initialPortalTab}
-      />
+      {showStaffModal && (
+        <React.Suspense fallback={null}>
+          <StaffAccessModal
+            isOpen={showStaffModal}
+            onClose={() => setShowStaffModal(false)}
+            onSuccess={handleInternalLoginSuccess}
+            initialRole={initialPortalTab}
+          />
+        </React.Suspense>
+      )}
 
       {/* Savour Club Loyalty Points Modal */}
       {showSavourClubModal && (
-        <SavourClubModal
-          currentAccount={activeLoyaltyAccount}
-          onSelectAccount={(acc) => {
-            setActiveLoyaltyAccount(acc);
-            setActiveMemberPhone(acc.customerPhone);
-          }}
-          onClose={() => setShowSavourClubModal(false)}
-          onGoToBooking={() => {
-            setShowSavourClubModal(false);
-            setActiveView('booking');
-          }}
-        />
+        <React.Suspense fallback={null}>
+          <SavourClubModal
+            currentAccount={activeLoyaltyAccount}
+            onSelectAccount={(acc) => {
+              setActiveLoyaltyAccount(acc);
+              setActiveMemberPhone(acc.customerPhone);
+            }}
+            onClose={() => setShowSavourClubModal(false)}
+            onGoToBooking={() => {
+              setShowSavourClubModal(false);
+              setActiveView('booking');
+            }}
+          />
+        </React.Suspense>
       )}
 
       {/* Mobile Bottom Navigation Bar */}
@@ -710,14 +727,16 @@ export default function App() {
 
       {/* Global Waitlist Ticket Pass Modal */}
       {showGlobalWaitlistModal && activeWaitlistTicket && (
-        <WaitlistTicketPassModal
-          initialEntry={activeWaitlistTicket}
-          onClose={() => setShowGlobalWaitlistModal(false)}
-          onCancelled={() => {
-            setActiveWaitlistTicket(null);
-            setShowGlobalWaitlistModal(false);
-          }}
-        />
+        <React.Suspense fallback={null}>
+          <WaitlistTicketPassModal
+            initialEntry={activeWaitlistTicket}
+            onClose={() => setShowGlobalWaitlistModal(false)}
+            onCancelled={() => {
+              setActiveWaitlistTicket(null);
+              setShowGlobalWaitlistModal(false);
+            }}
+          />
+        </React.Suspense>
       )}
 
       {/* Floating Camera Button for Staff (Mobile & Desktop Quick Access) */}
@@ -741,21 +760,29 @@ export default function App() {
       )}
 
       {/* Camera QR Code Scanner Modal for Staff Arrival Check-in */}
-      <QRScannerModal
-        isOpen={showQRScanner}
-        onClose={() => setShowQRScanner(false)}
-        reservations={reservations}
-        tables={tables}
-        onReservationUpdated={(updated) => {
-          setReservations(prev => prev.map(r => r.id === updated.id ? updated : r));
-        }}
-      />
+      {showQRScanner && (
+        <React.Suspense fallback={null}>
+          <QRScannerModal
+            isOpen={showQRScanner}
+            onClose={() => setShowQRScanner(false)}
+            reservations={reservations}
+            tables={tables}
+            onReservationUpdated={(updated) => {
+              setReservations(prev => prev.map(r => r.id === updated.id ? updated : r));
+            }}
+          />
+        </React.Suspense>
+      )}
 
       {/* Digital Menu Catalog Modal (Live Stock) */}
-      <DigitalMenuModal
-        isOpen={showDigitalMenuModal}
-        onClose={() => setShowDigitalMenuModal(false)}
-      />
+      {showDigitalMenuModal && (
+        <React.Suspense fallback={null}>
+          <DigitalMenuModal
+            isOpen={showDigitalMenuModal}
+            onClose={() => setShowDigitalMenuModal(false)}
+          />
+        </React.Suspense>
+      )}
 
       {/* Footer with Discreet Internal Portal Link */}
       <footer className="no-print mt-12 sm:mt-16 border-t border-[#466052] bg-[#142018] py-8 text-xs text-[#b8c9bf] text-center pb-20 md:pb-8">

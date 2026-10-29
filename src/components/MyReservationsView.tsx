@@ -10,7 +10,9 @@ import {
   Sparkles,
   QrCode,
   ArrowRight,
-  Star
+  Star,
+  MessageCircle,
+  AlertCircle
 } from 'lucide-react';
 import { Reservation, PaymentMethod } from '../types/restaurant';
 import { TicketPassModal } from './TicketPassModal';
@@ -92,21 +94,39 @@ export const MyReservationsView: React.FC<MyReservationsViewProps> = ({
                 className="bg-[#18261e]/95 border border-[#354c3e] hover:border-amber-400/50 rounded-2xl p-5 sm:p-6 transition-all shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-5"
               >
                 <div className="space-y-3">
-                  <div className="flex items-center gap-2.5">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span className="font-mono text-base font-bold text-amber-300 bg-[#131e18] px-3 py-1 rounded-xl border border-[#354c3e]">
                       {res.bookingCode}
                     </span>
+
+                    {/* Dedicated Payment Status Badge */}
+                    {res.paymentStatus === 'waiting_verification' ? (
+                      <span className="px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1.5 animate-pulse">
+                        <Clock className="w-3.5 h-3.5 text-amber-400" />
+                        Menunggu Verifikasi Kasir
+                      </span>
+                    ) : res.paymentStatus === 'paid' ? (
+                      <span className="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center gap-1.5">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                        Deposit Lunas (Rp {res.depositAmount.toLocaleString('id-ID')})
+                      </span>
+                    ) : (
+                      <span className="px-3 py-1 rounded-full text-xs font-semibold bg-rose-500/15 text-rose-300 border border-rose-500/30 flex items-center gap-1.5">
+                        <AlertCircle className="w-3.5 h-3.5 text-rose-400" />
+                        Belum Bayar Deposit
+                      </span>
+                    )}
+
+                    {/* Attendance/Arrival Status Badge */}
                     <span
                       className={`px-3 py-1 rounded-full text-xs font-semibold ${
                         isArrived
-                          ? 'bg-teal-500/20 text-teal-300 border border-teal-500/40 animate-pulse'
+                          ? 'bg-teal-500/20 text-teal-300 border border-teal-500/40'
                           : isConfirmed
-                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
+                          ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
                           : isSeated
                           ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40'
-                          : isPending
-                          ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
-                          : 'bg-stone-800 text-stone-400'
+                          : 'bg-stone-800/80 text-stone-400 border border-stone-700/60'
                       }`}
                     >
                       {isArrived
@@ -115,9 +135,7 @@ export const MyReservationsView: React.FC<MyReservationsViewProps> = ({
                         ? 'Terkonfirmasi & Siap Datang'
                         : isSeated
                         ? 'Sedang Menikmati Santap'
-                        : isPending
-                        ? 'Menunggu Pembayaran Deposit'
-                        : res.status.toUpperCase()}
+                        : 'Menunggu Jadwal'}
                     </span>
                   </div>
 
@@ -140,7 +158,7 @@ export const MyReservationsView: React.FC<MyReservationsViewProps> = ({
                       {res.timeSlot} WIB
                     </span>
                     <span className="font-mono text-emerald-400">
-                      Deposit: Rp {res.depositAmount.toLocaleString('id-ID')} ({res.paymentStatus.toUpperCase()})
+                      Deposit: Rp {res.depositAmount.toLocaleString('id-ID')}
                     </span>
                     <span className="font-mono text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/30 flex items-center gap-1">
                       <Sparkles className="w-3 h-3 text-amber-400" />
@@ -155,7 +173,7 @@ export const MyReservationsView: React.FC<MyReservationsViewProps> = ({
                 </div>
 
                 {/* Actions */}
-                <div className="flex sm:flex-col gap-2 shrink-0">
+                <div className="flex flex-wrap sm:flex-col gap-2 shrink-0">
                   <button
                     onClick={() => setActiveTicket(res)}
                     className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-stone-950 font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-amber-600/20 transition-all cursor-pointer"
@@ -163,6 +181,22 @@ export const MyReservationsView: React.FC<MyReservationsViewProps> = ({
                     <QrCode className="w-4 h-4" />
                     Buka E-Tiket
                   </button>
+
+                  {/* Direct WhatsApp Confirmation if Waiting Verification */}
+                  {res.paymentStatus === 'waiting_verification' && (
+                    <a
+                      href={`https://wa.me/6289661315457?text=${encodeURIComponent(
+                        `Halo Goory Coffee & Eatery, saya telah melakukan pembayaran deposit reservasi dengan Kode Booking: ${res.bookingCode} atas nama ${res.customerName} (Meja ${res.tableName}, ${res.date} jam ${res.timeSlot} WIB, Deposit Rp ${res.depositAmount.toLocaleString('id-ID')}). Mohon bantuannya untuk verifikasi. Terima kasih!`
+                      )}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1 sm:flex-none px-3.5 py-2.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/40 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
+                      title="Konfirmasi Bukti Transfer / QRIS ke WhatsApp Kasir"
+                    >
+                      <MessageCircle className="w-3.5 h-3.5 text-emerald-400" />
+                      Konfirmasi Kasir WA
+                    </a>
+                  )}
 
                   <button
                     onClick={() => setReviewRes(res)}
@@ -210,17 +244,17 @@ export const MyReservationsView: React.FC<MyReservationsViewProps> = ({
       {paymentRes && (
         <DigitalPaymentGateway
           reservation={paymentRes}
-          onPaymentSuccess={(id, method, ref) => {
+          onPaymentSuccess={(id, method, ref, paymentStatus = 'waiting_verification') => {
             setPaymentRes(null);
             // Refresh
             const updated = matched.find(m => m.id === id);
             if (updated) {
               setActiveTicket({
                 ...updated,
-                paymentStatus: 'paid',
+                paymentStatus,
                 paymentMethod: method,
                 paymentReference: ref,
-                status: 'confirmed'
+                status: paymentStatus === 'paid' ? 'confirmed' : 'waiting_verification'
               });
             }
           }}

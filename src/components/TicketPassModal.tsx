@@ -12,7 +12,8 @@ import {
   Sparkles,
   Utensils,
   Star,
-  ExternalLink
+  ExternalLink,
+  MessageCircle
 } from 'lucide-react';
 import { Reservation } from '../types/restaurant';
 import { GoogleReviewModal } from './GoogleReviewModal';
@@ -138,6 +139,64 @@ export const TicketPassModal: React.FC<TicketPassModalProps> = ({
                 E-PASS
               </span>
             </div>
+          </div>
+
+          {/* Payment Status & WhatsApp Confirmation Card */}
+          <div className="bg-[#18261e] p-4 rounded-2xl border border-[#354c3e] space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className={`p-2.5 rounded-xl shrink-0 ${
+                  reservation.paymentStatus === 'waiting_verification'
+                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse'
+                    : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                }`}>
+                  {reservation.paymentStatus === 'waiting_verification' ? (
+                    <Clock className="w-5 h-5 text-amber-400" />
+                  ) : (
+                    <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                  )}
+                </div>
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs text-[#8ea598] uppercase font-mono tracking-wider">
+                      Status Deposit:
+                    </span>
+                    <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                      reservation.paymentStatus === 'waiting_verification'
+                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                        : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                    }`}>
+                      {reservation.paymentStatus === 'waiting_verification'
+                        ? 'Menunggu Verifikasi Kasir'
+                        : 'Lunas Terverifikasi'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-[#d6e3dc] font-mono mt-0.5">
+                    Nominal: <strong className="text-amber-300 font-bold">Rp {reservation.depositAmount.toLocaleString('id-ID')}</strong> • Metode: <strong className="uppercase">{reservation.paymentMethod || 'QRIS'}</strong>
+                  </p>
+                </div>
+              </div>
+
+              {/* Direct WhatsApp Confirmation Button */}
+              <a
+                href={`https://wa.me/6289661315457?text=${encodeURIComponent(
+                  `Halo Goory Coffee & Eatery, saya telah melakukan pembayaran deposit reservasi:\n• Kode Booking: ${reservation.bookingCode}\n• Nama: ${reservation.customerName}\n• Meja: ${reservation.tableName} (${reservation.date} jam ${reservation.timeSlot} WIB)\n• Nominal: Rp ${reservation.depositAmount.toLocaleString('id-ID')}\nMohon bantuannya untuk verifikasi. Terima kasih!`
+                )}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-emerald-200 text-xs font-semibold transition-all hover:scale-[1.02] shadow-xs cursor-pointer shrink-0"
+                title="Kirim konfirmasi ke WhatsApp Kasir Goory Coffee"
+              >
+                <MessageCircle className="w-4 h-4 text-emerald-400" />
+                <span>Konfirmasi via WhatsApp</span>
+              </a>
+            </div>
+
+            {reservation.paymentStatus === 'waiting_verification' && (
+              <p className="text-[11px] text-amber-200/90 bg-amber-500/10 p-2.5 rounded-xl border border-amber-500/20 leading-relaxed">
+                ℹ️ Konfirmasi pembayaran Anda telah tercatat di sistem. Kasir kami akan segera memverifikasi mutasi bank/QRIS Anda. Anda juga dapat mengirimkan konfirmasi instan via WhatsApp di atas.
+              </p>
+            )}
           </div>
 
           {/* Key Details Grid */}

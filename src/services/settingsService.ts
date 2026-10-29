@@ -13,7 +13,8 @@ import {
   RestaurantSettings, 
   NotificationSettings, 
   DepositSettings, 
-  CrewAccessSettings 
+  CrewAccessSettings,
+  QrisSettings 
 } from '../types/settings';
 
 const SETTINGS_COLLECTION = 'restaurant_settings';
@@ -34,6 +35,7 @@ export const getLocalCachedSettings = (): AppSettings => {
         notifications: { ...DEFAULT_APP_SETTINGS.notifications, ...(parsed.notifications || {}) },
         deposit: { ...DEFAULT_APP_SETTINGS.deposit, ...(parsed.deposit || {}) },
         crewAccess: { ...DEFAULT_APP_SETTINGS.crewAccess, ...(parsed.crewAccess || {}) },
+        qris: { ...DEFAULT_APP_SETTINGS.qris, ...(parsed.qris || {}) },
       };
     }
   } catch (err) {
@@ -224,6 +226,28 @@ export const updateCrewAccessSettings = async (
     updatedAt: new Date().toISOString(),
     updatedBy: authorEmail || current.adminProfile.email
   };
+  await saveAppSettings(updated, authorEmail);
+  return updated;
+};
+
+/**
+ * Update QRIS Configuration
+ */
+export const updateQrisSettings = async (
+  qris: Partial<QrisSettings>,
+  authorEmail?: string
+): Promise<AppSettings> => {
+  const current = getLocalCachedSettings();
+  const updated: AppSettings = {
+    ...current,
+    qris: {
+      ...current.qris,
+      ...qris
+    },
+    updatedAt: new Date().toISOString(),
+    updatedBy: authorEmail || 'Admin'
+  };
+
   await saveAppSettings(updated, authorEmail);
   return updated;
 };

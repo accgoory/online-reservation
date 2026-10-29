@@ -68,12 +68,23 @@ export interface CrewAccessSettings {
   requireAdminForRefund: boolean;
 }
 
+export interface QrisSettings {
+  nmid: string; // e.g. "ID102039281923"
+  merchantName: string; // e.g. "GOORY COFFEE & EATERY"
+  qrisMode: 'dynamic_auto' | 'custom_image' | 'custom_payload';
+  customImageUrl?: string;
+  customPayload?: string;
+  autoRefreshEnabled: boolean;
+  refreshIntervalSeconds: number; // e.g. 60
+}
+
 export interface AppSettings {
   adminProfile: AdminProfile;
   restaurant: RestaurantSettings;
   notifications: NotificationSettings;
   deposit: DepositSettings;
   crewAccess: CrewAccessSettings;
+  qris: QrisSettings;
   updatedAt: string;
   updatedBy: string;
 }
@@ -143,6 +154,15 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
     allowCrewWalkIn: true,
     allowCrewCancelReservation: false,
     requireAdminForRefund: true
+  },
+  qris: {
+    nmid: 'ID102039281923',
+    merchantName: 'GOORY COFFEE & EATERY',
+    qrisMode: 'dynamic_auto',
+    customImageUrl: '',
+    customPayload: '',
+    autoRefreshEnabled: true,
+    refreshIntervalSeconds: 60
   },
   updatedAt: new Date().toISOString(),
   updatedBy: 'System Default'

@@ -46,13 +46,14 @@ export type PaymentMethod =
 
 export type ReservationStatus = 
   | 'pending_payment'
+  | 'waiting_verification'
   | 'confirmed'
   | 'arrived'
   | 'seated'
   | 'completed'
   | 'cancelled';
 
-export type PaymentStatus = 'pending' | 'paid' | 'refunded';
+export type PaymentStatus = 'pending' | 'waiting_verification' | 'paid' | 'refunded';
 
 export interface Reservation {
   id: string;

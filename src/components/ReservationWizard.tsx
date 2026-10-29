@@ -57,6 +57,7 @@ interface ReservationWizardProps {
   initialSelectedTable?: RestaurantTable | null;
   activeLoyaltyAccount?: LoyaltyAccount | null;
   onOpenSavourClub?: () => void;
+  isStaff?: boolean;
 }
 
 export const ReservationWizard: React.FC<ReservationWizardProps> = ({
@@ -64,7 +65,8 @@ export const ReservationWizard: React.FC<ReservationWizardProps> = ({
   onReservationCreated,
   initialSelectedTable = null,
   activeLoyaltyAccount,
-  onOpenSavourClub
+  onOpenSavourClub,
+  isStaff = false
 }) => {
   // Step state (1: Schedule & Guests, 2: Choose Table, 3: Guest Details, 4: Payment, 5: Ticket)
   const [currentStep, setCurrentStep] = useState<number>(1);
@@ -83,16 +85,15 @@ export const ReservationWizard: React.FC<ReservationWizardProps> = ({
   
   const [selectedTable, setSelectedTable] = useState<RestaurantTable | null>(initialSelectedTable);
 
-  const [customerName, setCustomerName] = useState<string>('Bagus Kurniawan');
-  const [customerPhone, setCustomerPhone] = useState<string>('081234567890');
-  const [customerEmail, setCustomerEmail] = useState<string>('bagus.kurniawan@gmail.com');
+  // Empty default customer details as requested by user
+  const [customerName, setCustomerName] = useState<string>('');
+  const [customerPhone, setCustomerPhone] = useState<string>('');
+  const [customerEmail, setCustomerEmail] = useState<string>('');
   const [specialNotes, setSpecialNotes] = useState<string>('');
   const [dietaryRequests, setDietaryRequests] = useState<string>('');
 
-  // Loyalty Program State
-  const [loyaltyAccount, setLoyaltyAccount] = useState<LoyaltyAccount | null>(
-    activeLoyaltyAccount || INITIAL_LOYALTY_MEMBERS[0]
-  );
+  // Loyalty Program State (starts null until user enters phone or selects profile)
+  const [loyaltyAccount, setLoyaltyAccount] = useState<LoyaltyAccount | null>(null);
   const [usePointsDiscount, setUsePointsDiscount] = useState<boolean>(false);
   const [pointsToRedeem, setPointsToRedeem] = useState<number>(0);
   const [isCheckingMember, setIsCheckingMember] = useState<boolean>(false);
@@ -235,6 +236,12 @@ export const ReservationWizard: React.FC<ReservationWizardProps> = ({
         status: 'pending_payment',
       });
 
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('goory_guest_phone', customerPhone.trim());
+        localStorage.setItem('goory_guest_name', customerName.trim());
+        localStorage.setItem('goory_guest_email', customerEmail.trim());
+      }
+
       setCreatedReservation(reservation);
       setIsSubmitting(false);
       setShowPaymentModal(true);
@@ -245,15 +252,20 @@ export const ReservationWizard: React.FC<ReservationWizardProps> = ({
     }
   };
 
-  const handlePaymentSuccess = (resId: string, method: PaymentMethod, ref: string) => {
+  const handlePaymentSuccess = (
+    resId: string,
+    method: PaymentMethod,
+    ref: string,
+    paymentStatus: 'waiting_verification' | 'paid' = 'waiting_verification'
+  ) => {
     setShowPaymentModal(false);
     if (createdReservation) {
       const updated: Reservation = {
         ...createdReservation,
-        paymentStatus: 'paid',
+        paymentStatus,
         paymentMethod: method,
         paymentReference: ref,
-        status: 'confirmed'
+        status: paymentStatus === 'paid' ? 'confirmed' : 'waiting_verification'
       };
       setCreatedReservation(updated);
       onReservationCreated(updated);
@@ -551,21 +563,23 @@ export const ReservationWizard: React.FC<ReservationWizardProps> = ({
                     <Sparkles className="w-4 h-4" />
                     <span>Ambil Nomor Antrean (Waitlist)</span>
                   </button>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      await freeUpAllTables();
-                    }}
-                    className="text-[11px] text-stone-400 hover:text-amber-300 underline cursor-pointer"
-                  >
-                    [Tester: Kosongkan Meja Kembali]
-                  </button>
+                  {isStaff && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await freeUpAllTables();
+                      }}
+                      className="text-[11px] text-amber-400 hover:text-amber-300 underline cursor-pointer"
+                    >
+                      [Tester: Kosongkan Meja Kembali]
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
           )}
 
-          {/* Quick Simulation Test Bar for Waitlist Verification */}
+          {/* Quick Table Availability Bar */}
           <div className="p-3 bg-stone-950/70 border border-stone-800 rounded-2xl flex flex-wrap items-center justify-between text-xs text-stone-400 gap-2">
             <div className="flex items-center gap-2">
               <span className={`w-2 h-2 rounded-full ${isAllTablesBooked ? 'bg-rose-400 animate-ping' : 'bg-emerald-400'}`} />
@@ -576,30 +590,32 @@ export const ReservationWizard: React.FC<ReservationWizardProps> = ({
                 </strong>
               </span>
             </div>
-            <div className="flex items-center gap-2">
-              {!isAllTablesBooked ? (
-                <button
-                  type="button"
-                  onClick={async () => {
-                    await simulateFullHouse();
-                  }}
-                  className="px-2.5 py-1 rounded-lg bg-stone-900 hover:bg-stone-800 border border-amber-900/40 text-amber-300 text-[11px] font-medium cursor-pointer"
-                  title="Uji coba sistem ketika restoran penuh"
-                >
-                  ⚡ Tes: Simulasi Semua Meja Penuh (Full House)
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={async () => {
-                    await freeUpAllTables();
-                  }}
-                  className="px-2.5 py-1 rounded-lg bg-stone-900 hover:bg-stone-800 border border-emerald-900/40 text-emerald-400 text-[11px] font-medium cursor-pointer"
-                >
-                  ✓ Buka Kembali Semua Meja
-                </button>
-              )}
-            </div>
+            {isStaff && (
+              <div className="flex items-center gap-2">
+                {!isAllTablesBooked ? (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await simulateFullHouse();
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-stone-900 hover:bg-stone-800 border border-amber-900/40 text-amber-300 text-[11px] font-medium cursor-pointer"
+                    title="Uji coba sistem ketika restoran penuh"
+                  >
+                    ⚡ Tes: Simulasi Semua Meja Penuh (Full House)
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await freeUpAllTables();
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-stone-900 hover:bg-stone-800 border border-emerald-900/40 text-emerald-400 text-[11px] font-medium cursor-pointer"
+                  >
+                    ✓ Buka Kembali Semua Meja
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
           {/* View rendering */}
@@ -701,48 +717,50 @@ export const ReservationWizard: React.FC<ReservationWizardProps> = ({
             </div>
           </div>
 
-          {/* Quick Demo Member Switcher */}
-          <div className="p-3.5 bg-[#131e18]/90 rounded-2xl border border-[#354c3e] space-y-2">
-            <div className="flex items-center justify-between text-xs text-[#b8c9bf]">
-              <span className="flex items-center gap-1.5 font-medium text-[#d6e3dc]">
-                <Crown className="w-3.5 h-3.5 text-amber-400" />
-                Isi Cepat Profil Member Goory Club:
-              </span>
-              {onOpenSavourClub && (
-                <button
-                  type="button"
-                  onClick={onOpenSavourClub}
-                  className="text-amber-400 hover:text-amber-300 font-semibold text-[11px] underline cursor-pointer"
-                >
-                  Detail Goory Club
-                </button>
-              )}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {INITIAL_LOYALTY_MEMBERS.map(demo => {
-                const isSelected = cleanPhone(demo.customerPhone) === cleanPhone(customerPhone);
-                return (
+          {/* Quick Demo Member Switcher (Staff / Internal Demo Only) */}
+          {isStaff && (
+            <div className="p-3.5 bg-[#131e18]/90 rounded-2xl border border-[#354c3e] space-y-2">
+              <div className="flex items-center justify-between text-xs text-[#b8c9bf]">
+                <span className="flex items-center gap-1.5 font-medium text-[#d6e3dc]">
+                  <Crown className="w-3.5 h-3.5 text-amber-400" />
+                  Isi Cepat Profil Member Goory Club (Demo):
+                </span>
+                {onOpenSavourClub && (
                   <button
-                    key={demo.id}
                     type="button"
-                    onClick={() => handleSelectDemoMember(demo)}
-                    className={`px-3 py-1.5 rounded-xl text-xs transition-all flex items-center gap-1.5 cursor-pointer border ${
-                      isSelected
-                        ? 'bg-gradient-to-r from-amber-400 to-amber-500 text-stone-950 border-amber-400 font-bold shadow-md shadow-amber-500/25'
-                        : 'bg-[#18261e] text-[#c2d3ca] border-[#354c3e] hover:border-amber-400/40'
-                    }`}
+                    onClick={onOpenSavourClub}
+                    className="text-amber-400 hover:text-amber-300 font-semibold text-[11px] underline cursor-pointer"
                   >
-                    <span>{demo.customerName}</span>
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
-                      isSelected ? 'bg-stone-950 text-amber-300' : 'bg-[#131e18] text-amber-400'
-                    }`}>
-                      {demo.tier} • {demo.pointsBalance} Pts
-                    </span>
+                    Detail Goory Club
                   </button>
-                );
-              })}
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {INITIAL_LOYALTY_MEMBERS.map(demo => {
+                  const isSelected = cleanPhone(demo.customerPhone) === cleanPhone(customerPhone);
+                  return (
+                    <button
+                      key={demo.id}
+                      type="button"
+                      onClick={() => handleSelectDemoMember(demo)}
+                      className={`px-3 py-1.5 rounded-xl text-xs transition-all flex items-center gap-1.5 cursor-pointer border ${
+                        isSelected
+                          ? 'bg-gradient-to-r from-amber-400 to-amber-500 text-stone-950 border-amber-400 font-bold shadow-md shadow-amber-500/25'
+                          : 'bg-[#18261e] text-[#c2d3ca] border-[#354c3e] hover:border-amber-400/40'
+                      }`}
+                    >
+                      <span>{demo.customerName}</span>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${
+                        isSelected ? 'bg-stone-950 text-amber-300' : 'bg-[#131e18] text-amber-400'
+                      }`}>
+                        {demo.tier} • {demo.pointsBalance} Pts
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Form fields */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -985,6 +1003,7 @@ export const ReservationWizard: React.FC<ReservationWizardProps> = ({
       {showPaymentModal && createdReservation && (
         <DigitalPaymentGateway
           reservation={createdReservation}
+          isStaff={isStaff}
           onPaymentSuccess={handlePaymentSuccess}
           onCancel={() => setShowPaymentModal(false)}
         />
